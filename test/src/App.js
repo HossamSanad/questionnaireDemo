@@ -5,7 +5,7 @@ import SeamlessVideoPlayer from './InteractiveAgent';
 
 function App() {
   return (
-<>hhh</>
+<SeamlessVideoPlayer/>
   );
 }
 
