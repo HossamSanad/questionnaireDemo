@@ -1,19 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Box, Typography, Paper } from '@mui/material';
+import { VideoSource } from '../types';
 
+interface InternetSpeedMonitorOptions {
+  threshold?: number;
+  checkInterval?: number;
+  testFileUrl?: string;
+  testFileSize?: number;
+}
 
-const useInternetSpeedMonitor = (options = {}) => {
+const useInternetSpeedMonitor = (options: InternetSpeedMonitorOptions = {}) => {
   const {
-    threshold = 0.2, // Default threshold of 1 Mbps
-    checkInterval = 1000, // Check every 10 seconds by default
-    // Using a more reliable CDN URL that hosts common test files
-    testFileUrl = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css', // Bootstrap CSS as test file
-    testFileSize = 26, // Size in KB (approximate size of bootstrap.min.css)
+    threshold = 0.2,
+    checkInterval = 1000,
+    testFileUrl = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
+    testFileSize = 26,
   } = options;
 
   const [isSlowConnection, setIsSlowConnection] = useState(false);
-  const [currentSpeed, setCurrentSpeed] = useState(null);
+  const [currentSpeed, setCurrentSpeed] = useState<number | null>(null);
   const [isChecking, setIsChecking] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   const checkSpeed = async () => {
     if (isChecking) return;
@@ -48,7 +55,7 @@ const useInternetSpeedMonitor = (options = {}) => {
       setIsSlowConnection(speedMbps < threshold);
     } catch (error) {
       console.error('Error checking internet speed:', error);
-      setError(error.message);
+      setError((error as Error).message);
       setIsSlowConnection(true); // Assume connection issue on error
     } finally {
       setIsChecking(false);
@@ -76,51 +83,67 @@ const useInternetSpeedMonitor = (options = {}) => {
     isChecking
   };
 };
-const SeamlessVideoPlayer = () => {
-  // Video source list - replace with your actual video sources
-  const videoSources = [
-    {
-      id: 1,
-      title: "Video 1",
-      url: `${process.env.PUBLIC_URL}/1.mov` 
-    },
-    {
-      id: 2,
-      title: "Video 2",
-      url: `${process.env.PUBLIC_URL}/2.mov` 
-    },
-  ];
+
+interface VideoPlayerProps {
+  videoSources: VideoSource[];
+  initialVideoId?: number;
+  onVideoEnded?: (videoId: number) => void;
+  onArgumentSelected?: (argumentId: number) => void;
+}
+
+const VideoPlayer: React.FC<VideoPlayerProps> = ({
+  videoSources,
+  initialVideoId = 1,
+  onVideoEnded,
+  onArgumentSelected,
+}) => {
+  // Internet speed monitoring
   const { isSlowConnection, currentSpeed } = useInternetSpeedMonitor({
     threshold: 3, // Consider anything below 3 Mbps slow for video
     checkInterval: 5000, // Check every 5 seconds
   });
+
   // State management
-  const [currentSource, setCurrentSource] = useState(videoSources[0]);
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [currentSource, setCurrentSource] = useState<VideoSource>(
+    videoSources.find(src => src.id === initialVideoId) || videoSources[0]
+  );
+  const [showOptions, setShowOptions] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
+  
   // Refs
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const playerWrapperRef = useRef(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const playerWrapperRef = useRef<HTMLDivElement>(null);
 
   // Handle video ended event
   const handleVideoEnded = () => {
     // Capture the last frame
     writeToCanvas();
-    // Show dropdown
-    setShowDropdown(true);
+    // Show options
+    setShowOptions(true);
+    
+    if (onVideoEnded) {
+      onVideoEnded(currentSource.id);
+    }
   };
 
   // Change video source
-  const changeVideoSource = (source) => {
+  const changeVideoSource = (sourceId: number) => {
+    const source = videoSources.find(src => src.id === sourceId);
+    if (!source) return;
+    
     setIsTransitioning(true);
     writeToCanvas();
     
     // Set new source after a small delay to ensure canvas is ready
     setTimeout(() => {
       setCurrentSource(source);
-      setShowDropdown(false);
+      setShowOptions(false);
+      
+      if (onArgumentSelected) {
+        onArgumentSelected(sourceId);
+      }
     }, 50);
   };
 
@@ -137,7 +160,9 @@ const SeamlessVideoPlayer = () => {
     
     // Draw current video frame to canvas
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
     
     // Show canvas
     canvas.style.display = 'block';
@@ -146,7 +171,9 @@ const SeamlessVideoPlayer = () => {
   // Handle when new video is loaded and can play
   const handleCanPlay = () => {
     if (isTransitioning) {
-      videoRef.current.play();
+      if (videoRef.current) {
+        videoRef.current.play();
+      }
       setIsTransitioning(false);
     }
   };
@@ -179,6 +206,8 @@ const SeamlessVideoPlayer = () => {
       window.removeEventListener('resize', setPlayerDimensions);
     };
   }, []);
+
+  // Show warning when connection is slow
   useEffect(() => {
     if (isSlowConnection) {
       setShowWarning(true);
@@ -187,21 +216,38 @@ const SeamlessVideoPlayer = () => {
     }
   }, [isSlowConnection]);
   
+  // Get available next options
+  const getNextOptions = () => {
+    if (currentSource.nextOptions && currentSource.nextOptions.length > 0) {
+      return videoSources.filter(src => currentSource.nextOptions?.includes(src.id));
+    }
+    return videoSources.filter(src => src.id !== currentSource.id);
+  };
+  
   return (
-    <div className="video-player-container">
-      <div 
+    <Box sx={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+      <Box 
         ref={playerWrapperRef} 
-        className="player-wrapper"
-        style={{ position: 'relative', width: '100%', maxWidth: '800px', height: '450px' }}
+        sx={{ 
+          position: 'relative', 
+          width: '100%', 
+          height: '450px',
+          backgroundColor: '#000',
+          borderRadius: 2,
+          overflow: 'hidden'
+        }}
       >
         {/* Video Element */}
         <video
           ref={videoRef}
           src={currentSource.url}
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          style={{ 
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'contain' 
+          }}
           autoPlay
           muted
-          
           onEnded={handleVideoEnded}
           onCanPlay={handleCanPlay}
           onPlaying={handlePlaying}
@@ -212,7 +258,7 @@ const SeamlessVideoPlayer = () => {
           ref={canvasRef}
           style={{
             position: 'absolute',
-            objectFit: 'contain' ,
+            objectFit: 'contain',
             top: 0,
             left: 0,
             width: '100%',
@@ -222,55 +268,68 @@ const SeamlessVideoPlayer = () => {
           }}
         />
         
-        {/* Video selection dropdown */}
-        {showDropdown && (
-          <div 
-            className="video-dropdown-container"
-            style={{
+        {/* Argument selection options */}
+        {showOptions && (
+          <Box 
+            sx={{
               position: 'absolute',
               bottom: '20px',
               left: '50%',
               transform: 'translateX(-50%)',
+              width: '90%',
+              maxWidth: '600px',
               zIndex: 2,
               backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              padding: '15px',
-              borderRadius: '8px',
+              padding: 2,
+              borderRadius: 2,
               color: 'white'
             }}
           >
-            <p style={{ textAlign: 'center', marginBottom: '10px' }}>Select next video:</p>
-            <select
-              onChange={(e) => {
-                const selected = videoSources.find(src => src.id === parseInt(e.target.value));
-                if (selected) changeVideoSource(selected);
-              }}
-              value={currentSource.id}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '4px',
-                backgroundColor: '#333',
-                color: 'white',
-                border: '1px solid #666'
-              }}
-            >
-              {videoSources.map(source => (
-                <option key={source.id} value={source.id}>
-                  {source.title}
-                </option>
+            <Typography variant="body1" align="center" gutterBottom>
+              Select your next argument:
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {getNextOptions().map(option => (
+                <Paper 
+                  key={option.id}
+                  sx={{ 
+                    padding: 1.5, 
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    color: '#000',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 1)',
+                    }
+                  }}
+                  onClick={() => changeVideoSource(option.id)}
+                >
+                  <Typography variant="body2">{option.title}</Typography>
+                </Paper>
               ))}
-            </select>
-          </div>
-        )
-        }
-
-      </div>
-      {showWarning && (
-          <div className="absolute top-4 left-0 right-0 mx-auto w-4/5 bg-yellow-500 text-white p-2 rounded text-center">
-            Slow connection detected ({currentSpeed?.toFixed(1)} Mbps). Video quality reduced.
-          </div>
+            </Box>
+          </Box>
         )}
-    </div>
+      </Box>
+      
+      {/* Connection warning */}
+      {showWarning && (
+        <Box 
+          sx={{ 
+            mt: 1,
+            p: 1, 
+            backgroundColor: 'warning.main', 
+            color: 'warning.contrastText',
+            borderRadius: 1,
+            textAlign: 'center'
+          }}
+        >
+          <Typography variant="body2">
+            Slow connection detected ({currentSpeed?.toFixed(1)} Mbps). Video quality reduced.
+          </Typography>
+        </Box>
+      )}
+    </Box>
   );
 };
 
-export default SeamlessVideoPlayer;
+export default VideoPlayer;
