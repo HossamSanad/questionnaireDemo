@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Container, Box, Typography, Button, Paper } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import VideoPlayer from '../components/VideoPlayer';
@@ -10,13 +10,13 @@ const videoSources: VideoSource[] = [
   {
     id: 1,
     title: "Introduction to School Uniforms Debate",
-    url: `${process.env.PUBLIC_URL}/videos/1.mov`,
+    url: `${process.env.PUBLIC_URL}/videos/intro.mp4`,
     nextOptions: [2, 3]
   },
   {
     id: 2,
     title: "School uniforms promote equality among students",
-    url: `${process.env.PUBLIC_URL}/videos/2.mov`,
+    url: `${process.env.PUBLIC_URL}/videos/argument1.mp4`,
     nextOptions: [4, 5]
   },
   {
@@ -83,9 +83,60 @@ const videoSources: VideoSource[] = [
 
 const ExperimentPage: React.FC = () => {
   const navigate = useNavigate();
-  const { addSelectedArgument } = useExperiment();
+  const { 
+    addSelectedArgument, 
+    addVideoMetrics, 
+    addNetworkSpeed, 
+    markStepCompleted 
+  } = useExperiment();
+  
   const [currentVideoEnded, setCurrentVideoEnded] = useState(false);
   const [experimentComplete, setExperimentComplete] = useState(false);
+  const [performanceData, setPerformanceData] = useState({
+    videoSizes: {} as Record<number, number>,
+    loadTimes: {} as Record<number, number>,
+    bufferingEvents: [] as any[]
+  });
+
+  // Collect performance metrics
+  useEffect(() => {
+    // Track window resize for viewport metrics
+    const handleResize = () => {
+      console.log(`Viewport size: ${window.innerWidth}x${window.innerHeight}`);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    // Initial measurement
+    handleResize();
+    
+    // Network information API if available
+    if ('connection' in navigator) {
+      const connection = navigator.connection as any;
+      
+      const updateNetworkInfo = () => {
+        console.log(`Connection type: ${connection.effectiveType}`);
+        console.log(`Downlink: ${connection.downlink} Mbps`);
+        
+        // Add to context
+        if (connection.downlink) {
+          addNetworkSpeed(connection.downlink);
+        }
+      };
+      
+      connection.addEventListener('change', updateNetworkInfo);
+      updateNetworkInfo();
+      
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        connection.removeEventListener('change', updateNetworkInfo);
+      };
+    }
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [addNetworkSpeed]);
 
   const handleVideoEnded = (videoId: number) => {
     setCurrentVideoEnded(true);
@@ -98,11 +149,43 @@ const ExperimentPage: React.FC = () => {
   };
 
   const handleArgumentSelected = (videoId: number) => {
+    // Record the selection time
+    const selectionTime = Date.now();
+    
+    // Add to selected arguments
     addSelectedArgument(videoId);
     setCurrentVideoEnded(false);
+    
+    console.log(`Argument selected: ${videoId} at ${selectionTime}`);
+  };
+
+  const handleVideoMetrics = (metrics: any) => {
+    // Add metrics to context
+    addVideoMetrics(metrics);
+    
+    // Update local state for display/debugging
+    setPerformanceData(prev => {
+      const videoSizes = { ...prev.videoSizes };
+      videoSizes[metrics.videoId] = metrics.videoWidth * metrics.videoHeight;
+      
+      const loadTimes = { ...prev.loadTimes };
+      if (metrics.totalLoadTime) {
+        loadTimes[metrics.videoId] = metrics.totalLoadTime;
+      }
+      
+      return {
+        videoSizes,
+        loadTimes,
+        bufferingEvents: [...prev.bufferingEvents, ...(metrics.bufferingEvents || [])]
+      };
+    });
   };
 
   const handleFinishExperiment = () => {
+    // Mark experiment as completed
+    markStepCompleted('experiment');
+    
+    // Navigate to outro page
     navigate('/outro');
   };
 
@@ -138,6 +221,22 @@ const ExperimentPage: React.FC = () => {
             Complete Experiment
           </Button>
         </Box>
+      )}
+      
+      {/* Performance metrics display - would be hidden in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <Paper elevation={1} sx={{ p: 2, mt: 4, display: 'none' }}>
+          <Typography variant="h6">Performance Metrics (Debug)</Typography>
+          <Typography variant="body2">
+            Video Sizes: {JSON.stringify(performanceData.videoSizes)}
+          </Typography>
+          <Typography variant="body2">
+            Load Times: {JSON.stringify(performanceData.loadTimes)}
+          </Typography>
+          <Typography variant="body2">
+            Buffering Events: {performanceData.bufferingEvents.length}
+          </Typography>
+        </Paper>
       )}
     </Container>
   );

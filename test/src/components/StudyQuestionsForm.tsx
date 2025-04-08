@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   Box, 
   Typography, 
@@ -8,7 +8,8 @@ import {
   Radio, 
   FormControlLabel, 
   Button,
-  Paper
+  Paper,
+  CircularProgress
 } from '@mui/material';
 import { StudyData } from '../types';
 
@@ -17,20 +18,22 @@ interface LikertQuestionProps {
   value: number | null;
   onChange: (value: number) => void;
   error: boolean;
+  disabled: boolean;
 }
 
 const LikertQuestion: React.FC<LikertQuestionProps> = ({ 
   question, 
   value, 
   onChange, 
-  error 
+  error,
+  disabled
 }) => {
   return (
     <Box sx={{ mb: 3 }}>
       <Typography variant="body1" gutterBottom>
         {question}
       </Typography>
-      <FormControl component="fieldset" error={error} fullWidth>
+      <FormControl component="fieldset" error={error} fullWidth disabled={disabled}>
         <RadioGroup
           row
           value={value === null ? '' : value.toString()}
@@ -123,19 +126,21 @@ const LikertQuestion: React.FC<LikertQuestionProps> = ({
 interface StudyQuestionsFormProps {
   onSubmit: (data: StudyData) => void;
   initialData?: StudyData;
+  isSubmitting?: boolean;
 }
 
 const StudyQuestionsForm: React.FC<StudyQuestionsFormProps> = ({ 
   onSubmit, 
-  initialData 
+  initialData,
+  isSubmitting = false
 }) => {
-  const [formData, setFormData] = useState<StudyData>(initialData || {
+  const [formData, setFormData] = React.useState<StudyData>(initialData || {
     familiarityConversationalSystems: null,
     familiaritySchoolUniforms: null,
     familiarityNuclearEnergy: null,
   });
   
-  const [errors, setErrors] = useState({
+  const [errors, setErrors] = React.useState({
     familiarityConversationalSystems: false,
     familiaritySchoolUniforms: false,
     familiarityNuclearEnergy: false,
@@ -183,6 +188,7 @@ const StudyQuestionsForm: React.FC<StudyQuestionsFormProps> = ({
           value={formData.familiarityConversationalSystems}
           onChange={(value) => handleFamiliarityChange('familiarityConversationalSystems', value)}
           error={errors.familiarityConversationalSystems}
+          disabled={isSubmitting}
         />
         
         <LikertQuestion
@@ -190,6 +196,7 @@ const StudyQuestionsForm: React.FC<StudyQuestionsFormProps> = ({
           value={formData.familiaritySchoolUniforms}
           onChange={(value) => handleFamiliarityChange('familiaritySchoolUniforms', value)}
           error={errors.familiaritySchoolUniforms}
+          disabled={isSubmitting}
         />
         
         <LikertQuestion
@@ -197,6 +204,7 @@ const StudyQuestionsForm: React.FC<StudyQuestionsFormProps> = ({
           value={formData.familiarityNuclearEnergy}
           onChange={(value) => handleFamiliarityChange('familiarityNuclearEnergy', value)}
           error={errors.familiarityNuclearEnergy}
+          disabled={isSubmitting}
         />
         
         <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
@@ -205,8 +213,10 @@ const StudyQuestionsForm: React.FC<StudyQuestionsFormProps> = ({
             variant="contained"
             color="primary"
             size="large"
+            disabled={isSubmitting}
+            startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
           >
-            Continue to Experiment
+            {isSubmitting ? 'Submitting...' : 'Continue to Experiment'}
           </Button>
         </Box>
       </Box>

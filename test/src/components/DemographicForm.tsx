@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { DemographicData } from '../types';
 import { 
   Box, 
   Typography, 
@@ -12,9 +13,9 @@ import {
   Select, 
   Button,
   Paper,
-  SelectChangeEvent
+  SelectChangeEvent,
+  CircularProgress
 } from '@mui/material';
-import { DemographicData } from '../types';
 
 // List of countries for the dropdown
 const COUNTRIES = [
@@ -44,17 +45,22 @@ const COUNTRIES = [
 interface DemographicFormProps {
   onSubmit: (data: DemographicData) => void;
   initialData?: DemographicData;
+  isSubmitting?: boolean;
 }
 
-const DemographicForm: React.FC<DemographicFormProps> = ({ onSubmit, initialData }) => {
-  const [formData, setFormData] = useState<DemographicData>(initialData || {
+const DemographicForm: React.FC<DemographicFormProps> = ({ 
+  onSubmit, 
+  initialData,
+  isSubmitting = false
+}) => {
+  const [formData, setFormData] = React.useState<DemographicData>(initialData || {
     age: null,
     gender: null,
     nativeCountry: null,
     englishSkills: null,
   });
   
-  const [errors, setErrors] = useState({
+  const [errors, setErrors] = React.useState({
     age: false,
     gender: false,
     nativeCountry: false,
@@ -128,10 +134,11 @@ const DemographicForm: React.FC<DemographicFormProps> = ({ onSubmit, initialData
           error={errors.age}
           helperText={errors.age ? 'Age is required' : ''}
           InputProps={{ inputProps: { min: 18, max: 100 } }}
+          disabled={isSubmitting}
         />
         
         {/* Gender */}
-        <FormControl component="fieldset" margin="normal" error={errors.gender} fullWidth>
+        <FormControl component="fieldset" margin="normal" error={errors.gender} fullWidth disabled={isSubmitting}>
           <FormLabel component="legend">Gender</FormLabel>
           <RadioGroup
             value={formData.gender || ''}
@@ -151,7 +158,7 @@ const DemographicForm: React.FC<DemographicFormProps> = ({ onSubmit, initialData
         </FormControl>
         
         {/* Native Country */}
-        <FormControl fullWidth margin="normal" error={errors.nativeCountry}>
+        <FormControl fullWidth margin="normal" error={errors.nativeCountry} disabled={isSubmitting}>
           <FormLabel>Native Country</FormLabel>
           <Select
             value={formData.nativeCountry || ''}
@@ -175,7 +182,7 @@ const DemographicForm: React.FC<DemographicFormProps> = ({ onSubmit, initialData
         </FormControl>
         
         {/* English Skills */}
-        <FormControl fullWidth margin="normal" error={errors.englishSkills}>
+        <FormControl fullWidth margin="normal" error={errors.englishSkills} disabled={isSubmitting}>
           <FormLabel>English Skills</FormLabel>
           <Select
             value={formData.englishSkills || ''}
@@ -203,8 +210,10 @@ const DemographicForm: React.FC<DemographicFormProps> = ({ onSubmit, initialData
             variant="contained"
             color="primary"
             size="large"
+            disabled={isSubmitting}
+            startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
           >
-            Continue
+            {isSubmitting ? 'Submitting...' : 'Continue'}
           </Button>
         </Box>
       </Box>

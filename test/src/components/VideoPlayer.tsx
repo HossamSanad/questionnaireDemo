@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Typography, Paper } from '@mui/material';
+import { Box, Typography, Paper, Button } from '@mui/material';
 import { VideoSource } from '../types';
 
 interface InternetSpeedMonitorOptions {
@@ -91,6 +91,28 @@ interface VideoPlayerProps {
   onArgumentSelected?: (argumentId: number) => void;
 }
 
+// Performance metrics interface
+interface BufferingEvent {
+  startTime: number;
+  endTime: number | null;
+  duration: number | null;
+}
+
+interface VideoMetrics {
+  videoId: number;
+  videoWidth: number;
+  videoHeight: number;
+  playerWidth: number;
+  playerHeight: number;
+  loadStartTime: number;
+  canPlayTime: number | null;
+  playingTime: number | null;
+  endedTime: number | null;
+  bufferingEvents: BufferingEvent[];
+  maxLatency: number | null;
+  totalLoadTime: number | null;
+}
+
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
   videoSources,
   initialVideoId = 1,
@@ -110,6 +132,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showOptions, setShowOptions] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
+  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
+  
+  // Performance metrics state
+  const [currentMetrics, setCurrentMetrics] = useState<VideoMetrics | null>(null);
+  const [currentBufferingEvent, setCurrentBufferingEvent] = useState<BufferingEvent | null>(null);
   
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -122,10 +149,35 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     writeToCanvas();
     // Show options
     setShowOptions(true);
+    setSelectedOptionId(null);
+    
+    // Update metrics
+    if (currentMetrics) {
+      setCurrentMetrics({
+        ...currentMetrics,
+        endedTime: Date.now()
+      });
+    }
     
     if (onVideoEnded) {
       onVideoEnded(currentSource.id);
     }
+  };
+
+  // Handle option selection
+  const handleOptionSelect = (optionId: number) => {
+    setSelectedOptionId(optionId);
+  };
+
+  // Handle confirmation button click
+  const handleConfirmSelection = () => {
+    if (selectedOptionId === null) return;
+    
+    const selectionTime = Date.now();
+    changeVideoSource(selectedOptionId);
+    
+    // Here you would record the selection time for metrics
+    console.log(`Selection confirmed: ${selectedOptionId} at ${selectionTime}`);
   };
 
   // Change video source
@@ -136,10 +188,29 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsTransitioning(true);
     writeToCanvas();
     
+    // Initialize new metrics for this video
+    const newMetrics: VideoMetrics = {
+      videoId: sourceId,
+      videoWidth: 0,
+      videoHeight: 0,
+      playerWidth: playerWrapperRef.current?.clientWidth || 0,
+      playerHeight: playerWrapperRef.current?.clientHeight || 0,
+      loadStartTime: Date.now(),
+      canPlayTime: null,
+      playingTime: null,
+      endedTime: null,
+      bufferingEvents: [],
+      maxLatency: null,
+      totalLoadTime: null
+    };
+    
+    setCurrentMetrics(newMetrics);
+    
     // Set new source after a small delay to ensure canvas is ready
     setTimeout(() => {
       setCurrentSource(source);
       setShowOptions(false);
+      setSelectedOptionId(null);
       
       if (onArgumentSelected) {
         onArgumentSelected(sourceId);
@@ -170,6 +241,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Handle when new video is loaded and can play
   const handleCanPlay = () => {
+    // Update metrics
+    if (currentMetrics) {
+      setCurrentMetrics({
+        ...currentMetrics,
+        canPlayTime: Date.now(),
+        videoWidth: videoRef.current?.videoWidth || 0,
+        videoHeight: videoRef.current?.videoHeight || 0
+      });
+    }
+    
     if (isTransitioning) {
       if (videoRef.current) {
         videoRef.current.play();
@@ -178,10 +259,54 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  // Hide canvas when video starts playing
+  // Handle when video starts playing
   const handlePlaying = () => {
+    // Update metrics
+    if (currentMetrics) {
+      const now = Date.now();
+      setCurrentMetrics({
+        ...currentMetrics,
+        playingTime: now,
+        totalLoadTime: now - currentMetrics.loadStartTime
+      });
+    }
+    
+    // End any current buffering event
+    if (currentBufferingEvent && currentBufferingEvent.endTime === null) {
+      const endTime = Date.now();
+      const updatedEvent = {
+        ...currentBufferingEvent,
+        endTime,
+        duration: endTime - currentBufferingEvent.startTime
+      };
+      
+      setCurrentBufferingEvent(null);
+      
+      // Add to buffering events in metrics
+      if (currentMetrics) {
+        setCurrentMetrics({
+          ...currentMetrics,
+          bufferingEvents: [...currentMetrics.bufferingEvents, updatedEvent]
+        });
+      }
+    }
+    
     if (canvasRef.current) {
       canvasRef.current.style.display = 'none';
+    }
+  };
+
+  // Handle video waiting/buffering
+  const handleWaiting = () => {
+    // Start a new buffering event
+    if (!currentBufferingEvent || currentBufferingEvent.endTime !== null) {
+      const newBufferingEvent = {
+        startTime: Date.now(),
+        endTime: null,
+        duration: null
+      };
+      
+      setCurrentBufferingEvent(newBufferingEvent);
     }
   };
 
@@ -192,6 +317,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const { clientWidth, clientHeight } = playerWrapperRef.current;
         canvasRef.current.style.width = `${clientWidth}px`;
         canvasRef.current.style.height = `${clientHeight}px`;
+        
+        // Update current metrics with new player dimensions
+        if (currentMetrics) {
+          setCurrentMetrics({
+            ...currentMetrics,
+            playerWidth: clientWidth,
+            playerHeight: clientHeight
+          });
+        }
       }
     };
 
@@ -205,7 +339,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => {
       window.removeEventListener('resize', setPlayerDimensions);
     };
-  }, []);
+  }, [currentMetrics]);
 
   // Show warning when connection is slow
   useEffect(() => {
@@ -251,6 +385,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           onEnded={handleVideoEnded}
           onCanPlay={handleCanPlay}
           onPlaying={handlePlaying}
+          onWaiting={handleWaiting}
+          onLoadStart={() => console.log('Video load started')}
         />
         
         {/* Canvas for transition */}
@@ -267,48 +403,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             zIndex: 1
           }}
         />
-        
-        {/* Argument selection options */}
-        {showOptions && (
-          <Box 
-            sx={{
-              position: 'absolute',
-              bottom: '20px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '90%',
-              maxWidth: '600px',
-              zIndex: 2,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              padding: 2,
-              borderRadius: 2,
-              color: 'white'
-            }}
-          >
-            <Typography variant="body1" align="center" gutterBottom>
-              Select your next argument:
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {getNextOptions().map(option => (
-                <Paper 
-                  key={option.id}
-                  sx={{ 
-                    padding: 1.5, 
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    color: '#000',
-                    cursor: 'pointer',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 1)',
-                    }
-                  }}
-                  onClick={() => changeVideoSource(option.id)}
-                >
-                  <Typography variant="body2">{option.title}</Typography>
-                </Paper>
-              ))}
-            </Box>
-          </Box>
-        )}
       </Box>
       
       {/* Connection warning */}
@@ -326,6 +420,55 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <Typography variant="body2">
             Slow connection detected ({currentSpeed?.toFixed(1)} Mbps). Video quality reduced.
           </Typography>
+        </Box>
+      )}
+      
+      {/* Argument selection options - Now below the video */}
+      {showOptions && (
+        <Box 
+          sx={{
+            mt: 2,
+            p: 2,
+            backgroundColor: 'background.paper',
+            borderRadius: 2,
+            boxShadow: 1
+          }}
+        >
+          <Typography variant="h6" align="center" gutterBottom>
+            Select your next argument:
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+            {getNextOptions().map(option => (
+              <Paper 
+                key={option.id}
+                sx={{ 
+                  padding: 1.5, 
+                  backgroundColor: selectedOptionId === option.id ? 'primary.light' : 'background.paper',
+                  color: selectedOptionId === option.id ? 'primary.contrastText' : 'text.primary',
+                  cursor: 'pointer',
+                  border: '1px solid',
+                  borderColor: selectedOptionId === option.id ? 'primary.main' : 'divider',
+                  '&:hover': {
+                    backgroundColor: selectedOptionId === option.id ? 'primary.light' : 'action.hover',
+                  }
+                }}
+                onClick={() => handleOptionSelect(option.id)}
+              >
+                <Typography variant="body1">{option.title}</Typography>
+              </Paper>
+            ))}
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Button
+              variant="contained"
+              color="primary"
+              disabled={selectedOptionId === null}
+              onClick={handleConfirmSelection}
+              size="large"
+            >
+              Confirm Selection
+            </Button>
+          </Box>
         </Box>
       )}
     </Box>
