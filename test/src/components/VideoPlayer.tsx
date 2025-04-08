@@ -418,7 +418,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           }}
         >
           <Typography variant="body2">
-            Slow connection detected ({currentSpeed?.toFixed(1)} Mbps). Video quality reduced.
+            Slow connection detected ({currentSpeed?.toFixed(1)} Mbps).
           </Typography>
         </Box>
       )}
