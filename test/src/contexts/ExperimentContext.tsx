@@ -179,6 +179,7 @@ const [performanceMetrics, setPerformanceMetrics] = useState({
   };
 
   const addNetworkSpeed = (speed: number) => {
+    if(!completedSteps.experiment){
     setPerformanceMetrics(prev => {
       const newMeasurements = [
         ...prev.networkMetrics.speedMeasurements,
@@ -198,6 +199,7 @@ const [performanceMetrics, setPerformanceMetrics] = useState({
         }
       };
     });
+  }
   };
 
   const resetExperiment = () => {
