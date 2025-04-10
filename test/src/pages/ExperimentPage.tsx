@@ -11,13 +11,15 @@ const videoSources: VideoSource[] = [
     id: 1,
     title: "Introduction to School Uniforms Debate",
     url: `${process.env.PUBLIC_URL}/videos/1.mov`,
-    nextOptions: [2, 3]
+    nextOptions: [2]
   },
   {
     id: 2,
     title: "School uniforms promote equality among students",
     url: `${process.env.PUBLIC_URL}/videos/2.mov`,
+    // nextOptions: [4, 5]
     nextOptions: []
+
   },
   // {
   //   id: 3,
@@ -183,6 +185,7 @@ const ExperimentPage: React.FC = () => {
 
   const handleFinishExperiment = () => {
     // Mark experiment as completed
+    debugger
     markStepCompleted('experiment');
     
     // Navigate to outro page
@@ -201,14 +204,14 @@ const ExperimentPage: React.FC = () => {
         </Typography>
       </Paper>
       
-      <Box sx={{ mb: 4 }}>
+{ !experimentComplete&&     <Box sx={{ mb: 4 }}>
         <VideoPlayer 
           videoSources={videoSources}
           initialVideoId={1}
           onVideoEnded={handleVideoEnded}
           onArgumentSelected={handleArgumentSelected}
         />
-      </Box>
+      </Box>}
       
       {experimentComplete && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>

@@ -97,6 +97,7 @@ const [performanceMetrics, setPerformanceMetrics] = useState({
     speedMeasurements: [] as Array<{timestamp: number, speed: number}>,
   },
 });
+/*
   // ADD THIS EFFECT - Load saved state from localStorage on initial mount
   useEffect(() => {
     const savedState = localStorage.getItem('experimentProgress');
@@ -153,7 +154,7 @@ const [performanceMetrics, setPerformanceMetrics] = useState({
       console.log('Saved experiment progress to localStorage');
     }
   }, [demographicData, studyData, selectedArguments, completedSteps, startTime]);
-
+*/
 
   // Route protection
   useEffect(() => {
@@ -161,7 +162,7 @@ const [performanceMetrics, setPerformanceMetrics] = useState({
     
     // Redirect logic based on completed steps
     if (path === '/experiment' && !completedSteps.preStudy) {
-      navigate('/');
+      // navigate('/');
     } else if (path === '/outro' && !completedSteps.experiment) {
       navigate('/experiment');
     }
